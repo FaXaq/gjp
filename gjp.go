@@ -3,7 +3,9 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package gjp stands for Go JobPool, and is willing to be a simple jobpool manager. It maintains a number of queues determined at the init. No priority whatsoever, just every queues are processing one job at a time.
+Package gjp stands for Go JobPool, and is willing to be a simple jobpool manager. It maintains
+a number of queues determined at the init. No priority whatsoever, just every queues are
+processing one job at a time.
 */
 
 package gjp
