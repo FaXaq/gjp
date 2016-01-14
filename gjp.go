@@ -14,6 +14,7 @@ import (
 	"container/list"
 	"fmt"
 	"time"
+	"strings"
 )
 
 /*
@@ -43,33 +44,43 @@ type (
 	// Job
 	Job struct {
 		JobRunner
-		name          string        //Public property retrievable
-		element       *list.Element //list element necessary to remove from jobList
-		status        int           //Status of the current job
+		name          string //Public property retrievable
+		status        int    //Status of the current job
+		error         *JobError
 		executionTime time.Duration
+	}
+
+	//Error handling structure
+	JobError struct {
+		JobName     string //job name
+		ErrorString string //error as a string
 	}
 )
 
 /*
   SHUTDOWN INSTRUCTIONS
 */
-const abord string = "abort"     //stop immediatly cuting jobs immediatly
-const classic string = "classic" //stop by non authorizing new jobs in the pool and shutting down after
-const long string = "long"       //stop when there is no more job to process
+const (
+	abord   string = "abort"   //stop immediatly cuting jobs immediatly
+	classic string = "classic" //stop by non authorizing new jobs in the pool and shutting down after
+	long    string = "long"    //stop when there is no more job to process
+)
 
 /*
    JOB STATUS
 */
-const failed int = 0
-const success int = 1
-const waiting int = 2
+const (
+	failed  int = 0
+	success int = 1
+	waiting int = 2
+)
 
 /*
    INTERFACES
 */
 
 type JobRunner interface {
-	ExecuteJob() bool
+	ExecuteJob() (*JobError)
 }
 
 /*
@@ -110,6 +121,8 @@ func (jp *JobPool) ListWaitingJobs() {
 
 //Queue new job to currentJobPool taking on
 func (jp *JobPool) QueueJob(jobName string, jobRunner JobRunner, poolNumber int) (job *Job) {
+	defer catchPanic(jobName, "QueueJob")
+
 	job = &Job{
 		JobRunner: jobRunner,
 		name:      jobName,
@@ -117,7 +130,7 @@ func (jp *JobPool) QueueJob(jobName string, jobRunner JobRunner, poolNumber int)
 	}
 	//Add new job to the queue
 	jp.queue[poolNumber].jobsRemaining += 1
-	job.element = jp.queue[poolNumber].jobs.PushBack(job)
+	jp.queue[poolNumber].jobs.PushBack(job)
 
 	return
 }
@@ -125,6 +138,8 @@ func (jp *JobPool) QueueJob(jobName string, jobRunner JobRunner, poolNumber int)
 //Loop for processing jobs
 //Started at the creation of the pool
 func (jp *JobPool) ProcessJobs() {
+	defer catchPanic("ProcessJobs")
+
 	jp.working = true
 
 	//While loop
@@ -143,24 +158,36 @@ func (jp *JobPool) ProcessJobs() {
 			}
 		}
 	}
+	return
 }
 
 //Stop the jobPool and release all memory allowed
 //NYI
 func (jp *JobPool) StopProcessingJobs() {
 	jp.working = false
-
-}
-
-//Dequeue job from priority page
-func (jp *JobPool) DequeueJob(p int, e *list.Element) {
-	jp.queue[p].dequeueJob(e)
-
 }
 
 /*
    PRIVATE FUNCTIONS
 */
+
+//Handle error
+func catchPanic(v ...string) {
+	if r := recover(); r != nil {
+		fmt.Println("Recover", r)
+		fmt.Println("Details :", strings.Join(v, " "))
+	}
+}
+
+//lock queue while executing
+func (jq *JobQueue) lockQueue() {
+	jq.working = true
+}
+
+//unlock queue when jobs are done
+func (jq *JobQueue) unlockQueue() {
+	jq.working = false
+}
 
 //Remove job from currentQueue
 func (jq *JobQueue) dequeueJob(e *list.Element) {
@@ -169,12 +196,13 @@ func (jq *JobQueue) dequeueJob(e *list.Element) {
 
 //execute current joblist
 func (jq *JobQueue) executeJobQueue() {
-	//Always take the first job in queue
-	for e := jq.jobs.Front(); e != nil; e = jq.jobs.Front() {
-		j := e.Value.(*Job)
+	defer catchPanic("executeJobQueue")
+	for jq.jobsRemaining > 0 {
+		//Always take the first job in queue
+		j := jq.jobs.Front().Value.(*Job)
 
 		//Since job is retrieved remove it from the waiting queue
-		jq.dequeueJob(e)
+		jq.dequeueJob(jq.jobs.Front())
 
 		//start job execution
 		go jq.launchJobExecution()
@@ -188,52 +216,73 @@ func (jq *JobQueue) executeJobQueue() {
 
 		//Checking status on report
 		switch jobReport.status {
+		//Through an error if failed
 		case failed:
-			fmt.Println("Job", jobReport.name, "failed")
-
-			//Push it back at the end of the queue to process it later
-			jq.jobs.PushBack(jobReport)
+			if jobReport.error != nil {
+				fmt.Println(jobReport.error.fmtError())
+			} else {
+				fmt.Println(jobReport.name, "panicked after an execution of", jobReport.executionTime)
+			}
 			break
-
 		case success:
-			fmt.Println("Job", jobReport.name, "executed in", jobReport.executionTime)
-
-			//Remove one job
-			jq.jobsRemaining -= 1
+			fmt.Println("Job",
+				jobReport.name,
+				"executed in",
+				jobReport.executionTime)
 			break
 		}
-
+		jq.jobsRemaining -= 1
 		//Go to the next job
 	}
-
 	//unlock queue to allow new jobs to be push to it
 	jq.unlockQueue()
+	return
 }
 
+//Launch the JobExecution
 func (jq *JobQueue) launchJobExecution() {
+	defer catchPanic("launchJobExecution")
+
+	//Retrieve job from execution channel of the queue
 	j := <-jq.executionChannel
-	j.executeJob(time.Now())
+
+	//execute the job synchronously with time starter
+	j.status = j.executeJob(time.Now())
+	//add this time to the queue execution time
 	jq.totalExecutionTime += j.executionTime
-	j.status = success
+
+	//Send job to the report channel
 	jq.reportChannel <- j
 }
 
-func (j *Job) executeJob(start time.Time) bool {
+//execute the job safely and set the status back for the reportChannel
+func (j *Job) executeJob(start time.Time) (jobStatus int) {
+	defer catchPanic("Job", j.name, "failed in executeJob")
+	//Set the execution time for this job
 	defer func() {
 		j.executionTime = time.Since(start)
 	}()
-	fmt.Println("Start", j.name, "job")
-	return j.ExecuteJob()
+
+	j.error = j.ExecuteJob()
+	//Set the status required for the job
+	switch j.error {
+	case nil:
+		jobStatus = success
+		break
+	default:
+		jobStatus = failed
+		break
+	}
+	return
 }
 
-//lock queue while executing
-func (jq *JobQueue) lockQueue() {
-	jq.working = true
-}
-
-//unlock queue when jobs are done
-func (jq *JobQueue) unlockQueue() {
-	jq.working = false
+//create an error well formated
+func (je *JobError) fmtError() (errorString string) {
+	errorString = fmt.Sprintln("Job",
+		je.JobName,
+		"has failed with a error :",
+		je.ErrorString)
+	return
 }
 
 /*
@@ -253,11 +302,19 @@ type (
 	}
 )
 
-func (myjob *MyJob) ExecuteJob() bool {
-	for i := 0; i < 20; i++ {
-		fmt.Println(myjob.name, i)
+func (myjob *MyJob) ExecuteJob() (err *gjp.JobError) {
+	if myjob.name == "YES" {
+		defer panic("plz send haelp")
+		err = &gjp.JobError{
+			myjob.name,
+			"nooooooooo",
+		}
+		return
 	}
-	return true
+	for i := 0; i < 1; i++ {
+		fmt.Println(myjob.name)
+	}
+	return
 }
 
 func main(){
@@ -274,19 +331,19 @@ func main(){
 	jobPool.QueueJob(newJob.name, newJob, 0)
 	jobPool.QueueJob(newJob2.name, newJob2, 1)
 	jobPool.QueueJob(newJob3.name, newJob3, 1)
-	time.Sleep(time.Millisecond * 20) //Mandatory otherwise no output will be displayed
+	time.Sleep(time.Millisecond * 30)
 }
 
-You should have an output like this :
 
-Start YES job
-Start THAT job
-YES
+The execution should retrieve something like :
+
+Recover plz send haelp
+Details : Job YES failed in executeJob
+YES panicked after an execution of 14.046µs
 THAT
-Job THAT executed in 69.631µs
-Job YES executed in 69.219µs
-Start ROCKS job
+Job THAT executed in 24.399µs
 ROCKS
-Job ROCKS executed in 23.397µs
+Job ROCKS executed in 21.57µs
+
 
 */
