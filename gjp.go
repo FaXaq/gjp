@@ -61,7 +61,7 @@ type (
   SHUTDOWN INSTRUCTIONS
 */
 const (
-	abord   string = "abort"   //stop immediatly cuting jobs immediatly
+	abort   string = "abort"   //stop immediatly cuting jobs immediatly
 	classic string = "classic" //stop by non authorizing new jobs in the pool and shutting down after
 	long    string = "long"    //stop when there is no more job to process
 )
@@ -89,11 +89,16 @@ type JobRunner interface {
 
 //Initialization function
 func New(poolRange int) (jp *JobPool) {
+	//Create the jobPool
 	jp = &JobPool{
 		poolRange: poolRange,
 		working:   false,
+		shutdownChannel:  make(chan string),
 	}
+
+	//create the queuer ranges
 	jp.queue = make([]*JobQueue, jp.poolRange)
+
 	for i := 0; i < len(jp.queue); i++ {
 		jp.queue[i] = &JobQueue{
 			jobs:             list.New(),
@@ -105,7 +110,7 @@ func New(poolRange int) (jp *JobPool) {
 
 	//launch the loop
 	go jp.ProcessJobs()
-	go jp.StopProcessingJobs()
+	go jp.ListenForShutdown()
 
 	return
 }
@@ -163,8 +168,14 @@ func (jp *JobPool) ProcessJobs() {
 
 //Stop the jobPool and release all memory allowed
 //NYI
-func (jp *JobPool) StopProcessingJobs() {
+func (jp *JobPool) ListenForShutdown() {
+	fmt.Println("Waiting for shutdown")
+	<- jp.shutdownChannel
 	jp.working = false
+}
+
+func (jp *JobPool) ShutdownWorkPool() {
+	jp.shutdownChannel <- abort
 }
 
 /*
