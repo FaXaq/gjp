@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"time"
 	"strings"
+	"os/exec"
+	"log"
 )
 
 /*
@@ -29,6 +31,7 @@ type (
 		queue           []*JobQueue //Containing a "poolRange" number of queues
 		shutdownChannel chan string //NYI
 		working         bool
+		jobsRemaining int //total of jobs remaining
 	}
 
 	// JobQueue is structure to control jobs queues
@@ -44,6 +47,7 @@ type (
 	// Job
 	Job struct {
 		JobRunner
+		id []byte
 		name          string //Public property retrievable
 		status        int    //Status of the current job
 		error         *JobError
@@ -107,12 +111,14 @@ func New(poolRange int) (jp *JobPool) {
 			working:          false,
 		}
 	}
-
-	//launch the loop
-	go jp.ProcessJobs()
-	go jp.ListenForShutdown()
-
 	return
+}
+
+//Start jobPool
+func (jp *JobPool) Start() {
+	go jp.ListenForShutdown()
+	go jp.ProcessJobs()
+	jp.working = true
 }
 
 //List current waiting jobs in each queues
@@ -127,11 +133,19 @@ func (jp *JobPool) ListWaitingJobs() {
 //Queue new job to currentJobPool taking on
 func (jp *JobPool) QueueJob(jobName string, jobRunner JobRunner, poolNumber int) (job *Job) {
 	defer catchPanic(jobName, "QueueJob")
+	fmt.Println("Adding",jobName,"to Queue", poolNumber)
+
+	//generating uuid for the job
+	out, err := exec.Command("uuidgen").Output()
+	if err != nil {
+		fmt.Println("Couldn't generate uuid for new job")
+	}
 
 	job = &Job{
 		JobRunner: jobRunner,
 		name:      jobName,
 		status:    waiting,
+		id: out,
 	}
 	//Add new job to the queue
 	jp.queue[poolNumber].jobsRemaining += 1
@@ -145,21 +159,22 @@ func (jp *JobPool) QueueJob(jobName string, jobRunner JobRunner, poolNumber int)
 func (jp *JobPool) ProcessJobs() {
 	defer catchPanic("ProcessJobs")
 
-	jp.working = true
-
 	//While loop
 	for jp.working == true {
-
+		//count jobs remaining
+		jp.jobsRemaining = 0;
 		//iterate through each queue containing jobs
 		for i := 0; i < len(jp.queue); i++ {
-			if jp.queue[i].jobsRemaining > 0 &&
-				jp.queue[i].working == false {
+			if jp.queue[i].jobsRemaining > 0 {
+				jp.jobsRemaining += jp.queue[i].jobsRemaining
+				if jp.queue[i].working == false {
 
-				//lock queue to avoid double processing
-				jp.queue[i].lockQueue()
+					//lock queue to avoid double processing
+					jp.queue[i].lockQueue()
 
-				//Launch the queue execution in a thread
-				go jp.queue[i].executeJobQueue()
+					//Launch the queue execution in a thread
+					go jp.queue[i].executeJobQueue()
+				}
 			}
 		}
 	}
@@ -171,7 +186,9 @@ func (jp *JobPool) ProcessJobs() {
 func (jp *JobPool) ListenForShutdown() {
 	fmt.Println("Waiting for shutdown")
 	<- jp.shutdownChannel
+	fmt.Println("Shutting Down")
 	jp.working = false
+	fmt.Println("Shutdown")
 }
 
 func (jp *JobPool) ShutdownWorkPool() {
@@ -208,6 +225,7 @@ func (jq *JobQueue) dequeueJob(e *list.Element) {
 //execute current joblist
 func (jq *JobQueue) executeJobQueue() {
 	defer catchPanic("executeJobQueue")
+
 	for jq.jobsRemaining > 0 {
 		//Always take the first job in queue
 		j := jq.jobs.Front().Value.(*Job)
@@ -232,7 +250,9 @@ func (jq *JobQueue) executeJobQueue() {
 			if jobReport.error != nil {
 				fmt.Println(jobReport.error.fmtError())
 			} else {
-				fmt.Println(jobReport.name, "panicked after an execution of", jobReport.executionTime)
+				fmt.Println(jobReport.name,
+					"panicked after an execution of",
+					jobReport.executionTime)
 			}
 			break
 		case success:
@@ -264,6 +284,7 @@ func (jq *JobQueue) launchJobExecution() {
 
 	//Send job to the report channel
 	jq.reportChannel <- j
+	return
 }
 
 //execute the job safely and set the status back for the reportChannel
