@@ -1,2 +1,2 @@
-# gojob
-job queue manager
+# gjp
+Go Job Pool
