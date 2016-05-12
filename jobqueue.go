@@ -101,7 +101,6 @@ func (jq *JobQueue) executeJobQueue() {
 //Launch the JobExecution
 func (jq *JobQueue) launchJobExecution() {
 	defer catchPanic("launchJobExecution")
-
 	//Retrieve job from execution channel of the queue
 	j := <-jq.executionChannel
 

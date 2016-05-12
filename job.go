@@ -66,7 +66,7 @@ func newJob(jobRunner JobRunner, jobName string) (job *Job, jobId string) {
 
 //execute the job safely and set the status back for the reportChannel
 func (j *Job) executeJob(start time.Time) {
-	defer catchPanic("Job", j.Name, "failed in executeJob",j.GetJobError())
+	defer catchPanic("Job", j.Name, "failed in executeJob")
 	//Set the execution time for this job
 
 	j.Start = start

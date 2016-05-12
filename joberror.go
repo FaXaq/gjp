@@ -22,12 +22,14 @@ type (
 	//Error handling structure
 	JobError struct {
 		ErrorString string //error as a string
+		desc string
 	}
 )
 
-func NewJobError(err error) (jobError *JobError) {
+func NewJobError(err error, desc string) (jobError *JobError) {
 	jobError = &JobError{
 		err.Error(),
+		desc,
 	}
 	return
 }
@@ -35,7 +37,7 @@ func NewJobError(err error) (jobError *JobError) {
 
 //create an error well formated
 func (je *JobError) fmtError() (errorString string) {
-	errorString = fmt.Sprintln("error :",
-		je.ErrorString)
+	errorString = fmt.Sprintln(je.ErrorString, ":",
+		je.desc)
 	return
 }
