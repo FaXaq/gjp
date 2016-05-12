@@ -11,9 +11,10 @@ processing one job at a time.
 package gjp
 
 import (
+	"encoding/json"
 	"fmt"
-	"time"
 	"os/exec"
+	"time"
 )
 
 /*
@@ -23,62 +24,62 @@ import (
 type (
 	// Job
 	Job struct {
-		JobRunner
-		id []byte
-		name          string //Public property retrievable
-		status        int    //Status of the current job
-		error         *JobError
-		start time.Time
-		end time.Time
+		JobRunner `json:"-"` //skip the field for json
+		Id        string     `json:"id"`
+		Name      string     `json:"name"`   //Public property retrievable
+		Status    int        `json:"status"` //Status of the current job
+		Error     *JobError  `json:"-"`
+		Start     time.Time  `json:"start"`
+		End       time.Time  `json:"end"`
 	}
 )
-
 
 /*
    JOB STATUS
 */
 const (
-	failed  int = 0
-	success int = 1
-	waiting int = 2
+	failed     int = 0
+	success    int = 1
+	waiting    int = 2
 	processing int = 3
 )
 
-func newJob (jobRunner JobRunner, jobName string) (job *Job, jobId string){
+func newJob(jobRunner JobRunner, jobName string) (job *Job, jobId string) {
 	//generating uuid for the job
 	out, err := exec.Command("uuidgen").Output()
 	if err != nil {
+		panic("Couldn't generate uuid for new job")
 		fmt.Println("Couldn't generate uuid for new job")
 	}
 
 	job = &Job{
 		JobRunner: jobRunner,
-		name:      jobName,
-		status:    waiting,
-		id: out,
+		Name:      jobName,
+		Status:    waiting,
+		Id:        string(out),
 	}
 
-	jobId = string(job.id[:])
+	jobId = job.Id
 
 	return
 }
 
 //execute the job safely and set the status back for the reportChannel
 func (j *Job) executeJob(start time.Time) {
-	defer catchPanic("Job", j.name, "failed in executeJob")
+	defer catchPanic("Job", j.Name, "failed in executeJob",j.GetJobError())
 	//Set the execution time for this job
 
-	j.start = start
+	j.Start = start
 	j.setJobToProcessing()
 
 	defer func() {
-		j.end = time.Now()
+		j.End = time.Now()
 	}()
 
-	j.error = j.ExecuteJob()
+	j.Error = j.ExecuteJob()
 
 	//Set the job status
-	switch j.error {
+	switch j.Error {
 	case nil:
 		j.setJobToSuccess()
 		break
@@ -88,80 +89,105 @@ func (j *Job) executeJob(start time.Time) {
 	}
 	return
 }
+
 /*
  GETTERS & SETTERS
 */
 
-//create an error well formated
-func (j *Job) getJobError() (errorString string) {
-	errorString = j.error.fmtError()
-	return
-}
-
-func (j *Job) getJobStringId() (jobId string) {
-	jobId = string(j.id[:])
-	return
-}
-
-func (j *Job) jobErrored() (jobError bool, error string) {
-	if j.status == 0 {
-		jobError = true
-		error = j.getJobError()
+func (j *Job) HasJobErrored() (error bool) {
+	fmt.Println("Has job", j.GetJobName(), "errored ?", j.Error != nil)
+	if j.Error != nil {
+		error = true
+	} else {
+		error = false
 	}
 	return
 }
 
-func (j *Job) getJobStatus() (jobStatus string) {
-	switch j.status {
+//create an error well formated
+func (j *Job) GetJobError() (errorString string) {
+	errorString = j.Error.fmtError()
+	return
+}
+
+func (j *Job) getJobStringId() (jobId string) {
+	jobId = j.Id
+	return
+}
+
+func (j *Job) jobErrored() (jobError bool, error string) {
+	if j.Status == 0 {
+		jobError = true
+		error = j.GetJobError()
+	}
+	return
+}
+
+func (j *Job) GetJobStatus() (jobStatus string) {
+	switch j.Status {
 	case 0:
 		jobStatus = "failed"
-		break;
+		break
 	case 1:
 		jobStatus = "success"
-		break;
+		break
 	case 2:
 		jobStatus = "waiting"
-		break;
+		break
 	case 3:
 		jobStatus = "processing"
-		break;
+		break
 	default:
 		jobStatus = "error"
-		break;
+		break
 	}
 	return
 }
 
 func (j *Job) getExecutionTime() (executionTime time.Duration) {
 	nullTime := time.Time{}
-	if j.end == nullTime {
-		executionTime = j.start.Sub(j.end)
+	if j.End == nullTime {
+		executionTime = j.Start.Sub(j.End)
 	} else {
-		executionTime = time.Since(j.start)
+		executionTime = time.Since(j.Start)
 	}
 	return
 }
 
-func (j *Job) getJobInfos() (jobName string, jobId string, jobStatus string) {
-	jobName = j.name
-	jobId = j.getJobStringId()
-	jobStatus = j.getJobStatus()
+func (j *Job) GetJobInfos() (jobjson []byte) {
+	var (
+		err error
+	)
+	jobjson, err = json.Marshal(j)
+	if err != nil {
+		fmt.Println(err.Error())
+		panic("error while rendering json")
+	}
+	return
+}
 
+func (j *Job) GetJobId() (jobId string) {
+	jobId = j.Id
+	return
+}
+
+func (j *Job) GetJobName() (jobName string) {
+	jobName = j.Name
 	return
 }
 
 func (j *Job) setJobToWaiting() {
-	j.status = waiting
+	j.Status = waiting
 }
 
 func (j *Job) setJobToError() {
-	j.status = failed
+	j.Status = failed
 }
 
 func (j *Job) setJobToSuccess() {
-	j.status = success
+	j.Status = success
 }
 
 func (j *Job) setJobToProcessing() {
-	j.status = processing
+	j.Status = processing
 }

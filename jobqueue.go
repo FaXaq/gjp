@@ -13,6 +13,8 @@ import (
 	"container/list"
 	"fmt"
 	"time"
+	"strings"
+	"errors"
 )
 
 /*
@@ -69,20 +71,21 @@ func (jq *JobQueue) executeJobQueue() {
 		jobReport := <-jq.reportChannel
 
 		//Checking status on report
-		switch jobReport.status {
+		switch jobReport.Status {
 		//Through an error if failed
 		case failed:
-			if jobReport.error != nil {
-				fmt.Println(jobReport.error.fmtError())
+			if jobReport.HasJobErrored() {
+				fmt.Println(jobReport.GetJobError())
 			} else {
-				fmt.Println(jobReport.name,
+				fmt.Println(jobReport.GetJobError())
+				fmt.Println(jobReport.GetJobName(),
 					"panicked after an execution of",
 					jobReport.getExecutionTime())
 			}
 			break
 		case success:
 			fmt.Println("Job",
-				jobReport.name,
+				jobReport.GetJobName(),
 				"executed in",
 				jobReport.getExecutionTime())
 			break
@@ -109,5 +112,26 @@ func (jq *JobQueue) launchJobExecution() {
 
 	//Send job to the report channel
 	jq.reportChannel <- j
+	return
+}
+
+
+/*
+  GETTERS & SETTERS
+*/
+
+func (jq *JobQueue) GetJobFromJobId(jobId string) (j *Job, err error) {
+	if jq.jobs.Len() == 0 {
+		err = errors.New("No job in queue")
+	}
+	for e := jq.jobs.Front(); e != nil; e = e.Next() {
+		job := e.Value.(*Job)
+		if strings.Compare(job.getJobStringId(), jobId) == 1 {
+			j = job
+			return
+		} else {
+			err = errors.New("Job not found")
+		}
+	}
 	return
 }

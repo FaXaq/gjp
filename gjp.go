@@ -14,6 +14,7 @@ import (
 	"container/list"
 	"fmt"
 	"strings"
+	"errors"
 )
 
 /*
@@ -87,8 +88,14 @@ func (jp *JobPool) Start() {
 func (jp *JobPool) ListWaitingJobs() (jobList string){
 	for i, _ := range jp.queue {
 		if jp.queue[i] != nil {
-			fmt.Println("in place", i, "there is", jp.queue[i].jobs.Len(), "job waiting")
-			jobList += fmt.Sprintf("in place %d there is %d job waiting", i, jp.queue[i].jobs.Len())
+			fmt.Println("in place",
+				i,
+				"there is",
+				jp.queue[i].jobs.Len(),
+				"job waiting")
+			jobList += fmt.Sprintf("in place %d there is %d job waiting",
+				i,
+				jp.queue[i].jobs.Len())
 		}
 	}
 	return
@@ -147,6 +154,19 @@ func (jp *JobPool) ListenForShutdown() {
 
 func (jp *JobPool) ShutdownWorkPool() {
 	jp.shutdownChannel <- abort
+}
+
+func (jp *JobPool) GetJobFromJobId(jobId string) (j *Job, err error) {
+	for i := 0; i < len(jp.queue); i++ {
+		j, err = jp.queue[i].GetJobFromJobId(jobId)
+		if err == nil {
+			return
+		}
+	}
+	if j == nil && err == nil {
+		err = errors.New("Job not found in this job pool")
+	}
+	return
 }
 
 /*
