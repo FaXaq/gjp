@@ -48,9 +48,9 @@ const (
 
 type JobRunner interface {
 	ExecuteJob() (*JobError)
-	NotifyStart()
-	NotifyEnd()
-	GetProgress()
+	NotifyStart(id string)
+	NotifyEnd(id string)
+	GetProgress(id string)
 }
 
 /*
