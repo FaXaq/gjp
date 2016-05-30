@@ -48,6 +48,9 @@ const (
 
 type JobRunner interface {
 	ExecuteJob() (*JobError)
+	NotifyStart()
+	NotifyEnd()
+	GetProgress()
 }
 
 /*
@@ -68,7 +71,8 @@ func New(poolRange int) (jp *JobPool) {
 
 	for i := 0; i < len(jp.queue); i++ {
 		jp.queue[i] = &JobQueue{
-			jobs:             list.New(),
+			Jobs:             list.New(),
+			Done: list.New(),
 			executionChannel: make(chan *Job, 2),
 			reportChannel:    make(chan *Job, 2),
 			working:          false,
@@ -84,18 +88,15 @@ func (jp *JobPool) Start() {
 	jp.working = true
 }
 
+func (jp *JobPool) AddQueue() {
+
+}
+
 //List current waiting jobs in each queues
 func (jp *JobPool) ListWaitingJobs() (jobList string){
 	for i, _ := range jp.queue {
 		if jp.queue[i] != nil {
-			fmt.Println("in place",
-				i,
-				"there is",
-				jp.queue[i].jobs.Len(),
-				"job waiting")
-			jobList += fmt.Sprintf("in place %d there is %d job waiting",
-				i,
-				jp.queue[i].jobs.Len())
+			jobList += jp.queue[i].GetJobsWaiting()
 		}
 	}
 	return
@@ -108,7 +109,7 @@ func (jp *JobPool) QueueJob(jobName string, jobRunner JobRunner, poolNumber int)
 	job, jobId = newJob(jobRunner, jobName)
 	//Add new job to the queue
 	jp.queue[poolNumber].jobsRemaining += 1
-	jp.queue[poolNumber].jobs.PushBack(job)
+	jp.queue[poolNumber].Jobs.PushBack(job)
 
 	fmt.Println("Adding",jobName,"to Queue", poolNumber,"with id", jobId)
 
@@ -139,6 +140,7 @@ func (jp *JobPool) ProcessJobs() {
 			}
 		}
 	}
+	fmt.Println("Shutdown")
 	return
 }
 
@@ -149,7 +151,6 @@ func (jp *JobPool) ListenForShutdown() {
 	<- jp.shutdownChannel
 	fmt.Println("Shutting Down")
 	jp.working = false
-	fmt.Println("Shutdown")
 }
 
 func (jp *JobPool) ShutdownWorkPool() {

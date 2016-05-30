@@ -15,6 +15,7 @@ import (
 	"time"
 	"strings"
 	"errors"
+	"encoding/json"
 )
 
 /*
@@ -24,12 +25,13 @@ import (
 type (
 	// JobQueue is structure to control jobs queues
 	JobQueue struct {
-		jobs               *list.List //list of waiting jobs
-		executionChannel   chan *Job  //Channel to contain current job to execute in queue
-		reportChannel      chan *Job  //Channel taking job back when its execution has finished
-		working            bool       //Indicate whether or not the queue is working
-		jobsRemaining      int        //Remaining jobs in the queue
-		totalExecutionTime time.Duration
+		Jobs               *list.List `json:"jobsWaiting"`//list of waiting jobs
+		executionChannel   chan *Job  `json:"-"` //Channel to contain current job to execute in queue
+		reportChannel      chan *Job  `json:"-"`//Channel taking job back when its execution has finished
+		working            bool       `json:"-"`//Indicate whether or not the queue is working
+		jobsRemaining      int        `json:"-"`//Remaining jobs in the queue
+		Done *list.List `json:"jobsDone"` //jobs done
+		totalExecutionTime time.Duration `json:"-"`
 	}
 )
 
@@ -46,7 +48,7 @@ func (jq *JobQueue) unlockQueue() {
 
 //Remove job from currentQueue
 func (jq *JobQueue) dequeueJob(e *list.Element) {
-	jq.jobs.Remove(e)
+	jq.Jobs.Remove(e)
 }
 
 //execute current joblist
@@ -55,10 +57,10 @@ func (jq *JobQueue) executeJobQueue() {
 
 	for jq.jobsRemaining > 0 {
 		//Always take the first job in queue
-		j := jq.jobs.Front().Value.(*Job)
+		j := jq.Jobs.Front().Value.(*Job)
 
 		//Since job is retrieved remove it from the waiting queue
-		jq.dequeueJob(jq.jobs.Front())
+		jq.dequeueJob(jq.Jobs.Front())
 
 		//start job execution
 		go jq.launchJobExecution()
@@ -72,7 +74,7 @@ func (jq *JobQueue) executeJobQueue() {
 
 		//Checking status on report
 		switch jobReport.Status {
-		//Through an error if failed
+			//Through an error if failed
 		case failed:
 			if jobReport.HasJobErrored() {
 				fmt.Println(jobReport.GetJobError())
@@ -90,6 +92,7 @@ func (jq *JobQueue) executeJobQueue() {
 				jobReport.getExecutionTime())
 			break
 		}
+		jq.Done.PushBack(jobReport)
 		jq.jobsRemaining -= 1
 		//Go to the next job
 	}
@@ -115,22 +118,40 @@ func (jq *JobQueue) launchJobExecution() {
 }
 
 
-/*
+	/*
   GETTERS & SETTERS
 */
 
 func (jq *JobQueue) GetJobFromJobId(jobId string) (j *Job, err error) {
-	if jq.jobs.Len() == 0 {
+	if jq.Jobs.Len() == 0 && jq.Done.Len() == 0 {
 		err = errors.New("No job in queue")
 	}
-	for e := jq.jobs.Front(); e != nil; e = e.Next() {
+	for e := jq.Jobs.Front(); e != nil; e = e.Next() {
 		job := e.Value.(*Job)
 		if strings.Compare(job.getJobStringId(), jobId) == 1 {
 			j = job
 			return
-		} else {
-			err = errors.New("Job not found")
 		}
 	}
+	//check in the done stack if not present in the waiting one
+	for e := jq.Done.Front(); e != nil; e = e.Next() {
+		job := e.Value.(*Job)
+		if strings.Compare(job.getJobStringId(), jobId) == 1 {
+			j = job
+			return
+		}
+	}
+	err = errors.New("Job not found")
+	return
+}
+
+func (jq *JobQueue) GetJobsWaiting() (jobList string) {
+	jlArray, err := json.Marshal(jq)
+	if err != nil {
+		fmt.Println("Error while processing serialization on jobs waiting :",
+			err.Error())
+	}
+	fmt.Println(jlArray)
+	jobList = string(jlArray[:])
 	return
 }

@@ -27,7 +27,7 @@ type (
 		JobRunner `json:"-"` //skip the field for json
 		Id        string     `json:"id"`
 		Name      string     `json:"name"`   //Public property retrievable
-		Status    int        `json:"status"` //Status of the current job
+		Status    string        `json:"status"` //Status of the current job
 		Error     *JobError  `json:"-"`
 		Start     time.Time  `json:"start"`
 		End       time.Time  `json:"end"`
@@ -38,10 +38,10 @@ type (
    JOB STATUS
 */
 const (
-	failed     int = 0
-	success    int = 1
-	waiting    int = 2
-	processing int = 3
+	failed     string = "failed"
+	success    string = "success"
+	waiting    string = "waiting"
+	processing string = "processing"
 )
 
 func newJob(jobRunner JobRunner, jobName string) (job *Job, jobId string) {
@@ -51,7 +51,6 @@ func newJob(jobRunner JobRunner, jobName string) (job *Job, jobId string) {
 		panic("Couldn't generate uuid for new job")
 		fmt.Println("Couldn't generate uuid for new job")
 	}
-
 	job = &Job{
 		JobRunner: jobRunner,
 		Name:      jobName,
@@ -70,6 +69,9 @@ func (j *Job) executeJob(start time.Time) {
 	//Set the execution time for this job
 
 	j.Start = start
+
+	j.NotifyStart()
+
 	j.setJobToProcessing()
 
 	defer func() {
@@ -87,6 +89,9 @@ func (j *Job) executeJob(start time.Time) {
 		j.setJobToError()
 		break
 	}
+
+	j.NotifyEnd()
+
 	return
 }
 
@@ -116,7 +121,7 @@ func (j *Job) getJobStringId() (jobId string) {
 }
 
 func (j *Job) jobErrored() (jobError bool, error string) {
-	if j.Status == 0 {
+	if j.Status == failed {
 		jobError = true
 		error = j.GetJobError()
 	}
@@ -124,23 +129,7 @@ func (j *Job) jobErrored() (jobError bool, error string) {
 }
 
 func (j *Job) GetJobStatus() (jobStatus string) {
-	switch j.Status {
-	case 0:
-		jobStatus = "failed"
-		break
-	case 1:
-		jobStatus = "success"
-		break
-	case 2:
-		jobStatus = "waiting"
-		break
-	case 3:
-		jobStatus = "processing"
-		break
-	default:
-		jobStatus = "error"
-		break
-	}
+	jobStatus = j.Status
 	return
 }
 
