@@ -70,7 +70,7 @@ func (j *Job) executeJob(start time.Time) {
 
 	j.Start = start
 
-	j.NotifyStart(j.id)
+	j.NotifyStart(j.Id)
 
 	j.setJobToProcessing()
 
@@ -90,7 +90,7 @@ func (j *Job) executeJob(start time.Time) {
 		break
 	}
 
-	j.NotifyEnd(j.id)
+	j.NotifyEnd(j.Id)
 
 	return
 }
