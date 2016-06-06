@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"strings"
 	"errors"
+	"os/exec"
 )
 
 /*
@@ -47,10 +48,10 @@ const (
 */
 
 type JobRunner interface {
-	ExecuteJob() (*JobError)
+	ExecuteJob(id string) (*JobError)
 	NotifyStart(id string)
 	NotifyEnd(id string)
-	GetProgress(id string)
+	GetProgress(id string) (percent float64, err error)
 }
 
 /*
@@ -72,7 +73,6 @@ func New(poolRange int) (jp *JobPool) {
 	for i := 0; i < len(jp.queue); i++ {
 		jp.queue[i] = &JobQueue{
 			Jobs:             list.New(),
-			Done: list.New(),
 			executionChannel: make(chan *Job, 2),
 			reportChannel:    make(chan *Job, 2),
 			working:          false,
@@ -81,15 +81,25 @@ func New(poolRange int) (jp *JobPool) {
 	return
 }
 
+//generate uuid
+func GenerateJobUID() (id string) {
+		//generating uuid for the job
+	out, err := exec.Command("uuidgen").Output()
+	if err != nil {
+		panic("Couldn't generate uuid for new job")
+		fmt.Println("Couldn't generate uuid for new job")
+	}
+
+	id = strings.TrimRight(string(out), "\n")
+
+	return
+}
+
 //Start jobPool
 func (jp *JobPool) Start() {
 	go jp.ListenForShutdown()
 	go jp.ProcessJobs()
 	jp.working = true
-}
-
-func (jp *JobPool) AddQueue() {
-
 }
 
 //List current waiting jobs in each queues
@@ -103,15 +113,15 @@ func (jp *JobPool) ListWaitingJobs() (jobList string){
 }
 
 //Queue new job to currentJobPool taking on
-func (jp *JobPool) QueueJob(jobName string, jobRunner JobRunner, poolNumber int) (job *Job, jobId string) {
+func (jp *JobPool) QueueJob(id string, jobName string, jobRunner JobRunner, poolNumber int) (job *Job) {
 	defer catchPanic(jobName, "QueueJob")
 
-	job, jobId = newJob(jobRunner, jobName)
+	job, _ = newJob(id, jobRunner, jobName)
 	//Add new job to the queue
 	jp.queue[poolNumber].jobsRemaining += 1
 	jp.queue[poolNumber].Jobs.PushBack(job)
 
-	fmt.Println("Adding",jobName,"to Queue", poolNumber,"with id", jobId)
+	fmt.Println("Adding",jobName,"to Queue", poolNumber,"with id", job.GetJobId())
 
 	return
 }

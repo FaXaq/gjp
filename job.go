@@ -13,7 +13,6 @@ package gjp
 import (
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"time"
 )
 
@@ -44,19 +43,15 @@ const (
 	processing string = "processing"
 )
 
-func newJob(jobRunner JobRunner, jobName string) (job *Job, jobId string) {
-	//generating uuid for the job
-	out, err := exec.Command("uuidgen").Output()
-	if err != nil {
-		panic("Couldn't generate uuid for new job")
-		fmt.Println("Couldn't generate uuid for new job")
-	}
+func newJob(id string, jobRunner JobRunner, jobName string) (job *Job, jobId string) {
 	job = &Job{
 		JobRunner: jobRunner,
 		Name:      jobName,
 		Status:    waiting,
-		Id:        string(out),
+		Id:        id,
 	}
+
+	fmt.Println("New job with Id : ", job.Id)
 
 	jobId = job.Id
 
@@ -78,7 +73,7 @@ func (j *Job) executeJob(start time.Time) {
 		j.End = time.Now()
 	}()
 
-	j.Error = j.ExecuteJob()
+	j.Error = j.ExecuteJob(j.Id)
 
 	//Set the job status
 	switch j.Error {
@@ -99,12 +94,12 @@ func (j *Job) executeJob(start time.Time) {
  GETTERS & SETTERS
 */
 
-func (j *Job) HasJobErrored() (error bool) {
-	fmt.Println("Has job", j.GetJobName(), "errored ?", j.Error != nil)
+func (j *Job) HasJobErrored() (errored bool) {
+	fmt.Println("Has job", j.GetJobName(), "errored ? ", j.Error != nil)
 	if j.Error != nil {
-		error = true
+		errored = true
 	} else {
-		error = false
+		errored = false
 	}
 	return
 }
@@ -143,14 +138,10 @@ func (j *Job) getExecutionTime() (executionTime time.Duration) {
 	return
 }
 
-func (j *Job) GetJobInfos() (jobjson []byte) {
-	var (
-		err error
-	)
+func (j *Job) GetJobInfos() (jobjson []byte, err error) {
 	jobjson, err = json.Marshal(j)
 	if err != nil {
 		fmt.Println(err.Error())
-		panic("error while rendering json")
 	}
 	return
 }

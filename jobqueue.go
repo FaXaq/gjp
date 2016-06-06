@@ -30,7 +30,6 @@ type (
 		reportChannel      chan *Job  `json:"-"`//Channel taking job back when its execution has finished
 		working            bool       `json:"-"`//Indicate whether or not the queue is working
 		jobsRemaining      int        `json:"-"`//Remaining jobs in the queue
-		Done *list.List `json:"jobsDone"` //jobs done
 		totalExecutionTime time.Duration `json:"-"`
 	}
 )
@@ -58,9 +57,6 @@ func (jq *JobQueue) executeJobQueue() {
 	for jq.jobsRemaining > 0 {
 		//Always take the first job in queue
 		j := jq.Jobs.Front().Value.(*Job)
-
-		//Since job is retrieved remove it from the waiting queue
-		jq.dequeueJob(jq.Jobs.Front())
 
 		//start job execution
 		go jq.launchJobExecution()
@@ -92,7 +88,10 @@ func (jq *JobQueue) executeJobQueue() {
 				jobReport.getExecutionTime())
 			break
 		}
-		jq.Done.PushBack(jobReport)
+
+		//Since job is done remove it from the jobs queue
+		jq.dequeueJob(jq.Jobs.Front())
+
 		jq.jobsRemaining -= 1
 		//Go to the next job
 	}
@@ -123,25 +122,21 @@ func (jq *JobQueue) launchJobExecution() {
 */
 
 func (jq *JobQueue) GetJobFromJobId(jobId string) (j *Job, err error) {
-	if jq.Jobs.Len() == 0 && jq.Done.Len() == 0 {
+	if jq.Jobs.Len() == 0 {
 		err = errors.New("No job in queue")
+		return
 	}
+
 	for e := jq.Jobs.Front(); e != nil; e = e.Next() {
 		job := e.Value.(*Job)
-		if strings.Compare(job.getJobStringId(), jobId) == 1 {
+		if strings.Contains(jobId, job.getJobStringId()) == true {
 			j = job
 			return
 		}
 	}
-	//check in the done stack if not present in the waiting one
-	for e := jq.Done.Front(); e != nil; e = e.Next() {
-		job := e.Value.(*Job)
-		if strings.Compare(job.getJobStringId(), jobId) == 1 {
-			j = job
-			return
-		}
-	}
+
 	err = errors.New("Job not found")
+
 	return
 }
 
