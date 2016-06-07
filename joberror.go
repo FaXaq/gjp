@@ -36,7 +36,7 @@ func NewJobError(err error, desc string) (jobError *JobError) {
 
 
 //create an error well formated
-func (je *JobError) fmtError() (errorString string) {
+func (je *JobError) FmtError() (errorString string) {
 	errorString = fmt.Sprintln(je.ErrorString, ":",
 		je.desc)
 	return

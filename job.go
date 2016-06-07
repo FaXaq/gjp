@@ -106,7 +106,7 @@ func (j *Job) HasJobErrored() (errored bool) {
 
 //create an error well formated
 func (j *Job) GetJobError() (errorString string) {
-	errorString = j.Error.fmtError()
+	errorString = j.Error.FmtError()
 	return
 }
 
