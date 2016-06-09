@@ -121,7 +121,11 @@ func (jp *JobPool) QueueJob(id string, jobName string, jobRunner JobRunner, pool
 	jp.queue[poolNumber].jobsRemaining += 1
 	jp.queue[poolNumber].Jobs.PushBack(job)
 
+	jp.working = true
+
 	fmt.Println("Adding",jobName,"to Queue", poolNumber,"with id", job.GetJobId())
+
+	go jp.ProcessJobs()
 
 	return
 }
@@ -149,6 +153,7 @@ func (jp *JobPool) ProcessJobs() {
 				}
 			}
 		}
+		jp.working = false
 	}
 	fmt.Println("Shutdown")
 	return
@@ -159,7 +164,7 @@ func (jp *JobPool) ProcessJobs() {
 func (jp *JobPool) ListenForShutdown() {
 	fmt.Println("Waiting for shutdown")
 	<- jp.shutdownChannel
-	fmt.Println("Shutting Down")
+	fmt.Println("Shutting Down, waiting for new jobs")
 	jp.working = false
 }
 
