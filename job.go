@@ -65,7 +65,7 @@ func (j *Job) executeJob(start time.Time) {
 
 	j.Start = start
 
-	j.NotifyStart(j.Id)
+	j.NotifyStart(j)
 
 	j.setJobToProcessing()
 
@@ -73,7 +73,7 @@ func (j *Job) executeJob(start time.Time) {
 		j.End = time.Now()
 	}()
 
-	j.Error = j.ExecuteJob(j.Id)
+	j.Error = j.ExecuteJob(j)
 
 	//Set the job status
 	switch j.Error {
@@ -85,7 +85,7 @@ func (j *Job) executeJob(start time.Time) {
 		break
 	}
 
-	j.NotifyEnd(j.Id)
+	j.NotifyEnd(j)
 
 	return
 }

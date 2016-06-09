@@ -26,11 +26,11 @@ type (
 	// JobPool principal s²tructure maintaining queues of jobs
 	// from a priority range
 	JobPool struct {
-		poolRange       int
-		queue           []*JobQueue //Containing a "poolRange" number of queues
-		shutdownChannel chan string //NYI
-		working         bool
-		jobsRemaining int //total of jobs remaining
+		poolRange       int `json:"poolRange"`
+		queue           []*JobQueue `json:"jobQueues"` //Containing a "poolRange" number of queues
+		shutdownChannel chan string `json:"-"`//NYI
+		working         bool `json:"Working"`
+		jobsRemaining int `json:"Jobs remaining"` //total of jobs remaining
 	}
 )
 
@@ -48,10 +48,10 @@ const (
 */
 
 type JobRunner interface {
-	ExecuteJob(id string) (*JobError)
-	NotifyStart(id string)
-	NotifyEnd(id string)
-	GetProgress(id string) (percent float64, err error)
+	ExecuteJob(job *Job) (*JobError)
+	NotifyStart(job *Job)
+	NotifyEnd(job *Job)
+	GetProgress(id string) (percentage float64, err error)
 }
 
 /*

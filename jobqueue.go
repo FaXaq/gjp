@@ -28,9 +28,9 @@ type (
 		Jobs               *list.List `json:"jobsWaiting"`//list of waiting jobs
 		executionChannel   chan *Job  `json:"-"` //Channel to contain current job to execute in queue
 		reportChannel      chan *Job  `json:"-"`//Channel taking job back when its execution has finished
-		working            bool       `json:"-"`//Indicate whether or not the queue is working
-		jobsRemaining      int        `json:"-"`//Remaining jobs in the queue
-		totalExecutionTime time.Duration `json:"-"`
+		working            bool       `json:"working"`//Indicate whether or not the queue is working
+		jobsRemaining      int        `json:"jobsRemaining"`//Remaining jobs in the queue
+		totalExecutionTime time.Duration `json:"executionTime"`
 	}
 )
 
@@ -122,11 +122,6 @@ func (jq *JobQueue) launchJobExecution() {
 */
 
 func (jq *JobQueue) GetJobFromJobId(jobId string) (j *Job, err error) {
-	if jq.Jobs.Len() == 0 {
-		err = errors.New("No job in queue")
-		return
-	}
-
 	for e := jq.Jobs.Front(); e != nil; e = e.Next() {
 		job := e.Value.(*Job)
 		if strings.Contains(jobId, job.getJobStringId()) == true {
