@@ -38,9 +38,9 @@ type (
 */
 const (
 	failed     string = "failed"
-	success    string = "success"
-	waiting    string = "waiting"
-	processing string = "processing"
+	success    string = "done"
+	waiting    string = "queued"
+	processing string = "proceeded"
 )
 
 func newJob(id string, jobRunner JobRunner, jobName string) (job *Job, jobId string) {
