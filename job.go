@@ -65,13 +65,9 @@ func (j *Job) executeJob(start time.Time) {
 
 	j.Start = start
 
-	j.NotifyStart(j)
-
 	j.setJobToProcessing()
 
-	defer func() {
-		j.End = time.Now()
-	}()
+	j.NotifyStart(j)
 
 	j.Error = j.ExecuteJob(j)
 
@@ -84,6 +80,8 @@ func (j *Job) executeJob(start time.Time) {
 		j.setJobToError()
 		break
 	}
+
+	j.End = time.Now()
 
 	j.NotifyEnd(j)
 
