@@ -67,7 +67,7 @@ func (j *Job) executeJob(start time.Time) {
 
 	j.setJobToProcessing()
 
-	j.NotifyStart(j)
+	go j.NotifyStart(j)
 
 	j.Error = j.ExecuteJob(j)
 
@@ -83,7 +83,7 @@ func (j *Job) executeJob(start time.Time) {
 
 	j.End = time.Now()
 
-	j.NotifyEnd(j)
+	go j.NotifyEnd(j)
 
 	return
 }
@@ -96,7 +96,7 @@ func (j *Job) HasJobErrored() (errored bool) {
 	fmt.Println("Has job", j.GetJobName(), "errored ? ", j.Error != nil)
 	if j.Error != nil {
 		errored = true
-		j.NotifyEnd(j)
+		go j.NotifyEnd(j)
 	} else {
 		errored = false
 	}
