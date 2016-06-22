@@ -96,6 +96,7 @@ func (j *Job) HasJobErrored() (errored bool) {
 	fmt.Println("Has job", j.GetJobName(), "errored ? ", j.Error != nil)
 	if j.Error != nil {
 		errored = true
+		j.NotifyEnd(j)
 	} else {
 		errored = false
 	}
